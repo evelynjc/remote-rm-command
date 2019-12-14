@@ -10,7 +10,6 @@
 
 #define oops(msg)           \
     {                       \
-        printf("Error!: "); \
         perror(msg);        \
         printf("\n");       \
         exit(1);            \

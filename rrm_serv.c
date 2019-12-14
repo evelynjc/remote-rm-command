@@ -17,7 +17,6 @@
 #define MAX_LISTEN_QUEUE 5
 #define oops(msg)           \
     {                       \
-        printf("Error!: "); \
         perror(msg);        \
         printf("\n");       \
         exit(1);            \
@@ -37,8 +36,6 @@ int main(int ac, char *av[])
     int sock_id, sock_fd;      /* line id, file desc */
     FILE *sock_fpi, *sock_fpo; /* IN and OUT streams */
     FILE *pipe_fp;             /* use popen to run ls */
-    //char dirname[BUFSIZ];      /* from client */
-    //char command[BUFSIZ];      /* for popen() */
     char buf[BUFSIZ];
     char filebuf[F_BUFSIZ];
     int n_read, c,;
@@ -77,16 +74,13 @@ int main(int ac, char *av[])
     }
 
     /* main loop */
-    while (1)
-    {
+    while (1){
         /******************** ACCEPT ************************/
         sock_fd = accept(sock_id, NULL, NULL); /* wait for call */
-        if (sock_fd == -1)
-        {
+        if (sock_fd == -1){
             oops("accept");
         }
-        else
-        {
+        else{
             printf("New Client!\n");
         }
 
@@ -97,8 +91,7 @@ int main(int ac, char *av[])
         sscanf(buf, "%c %d", &option, &interact);
         //printf("option: %c, iterations: %d\n", option, interact);
 
-        if (option == 'x')
-        {
+        if (option == 'x'){
             // removing file(s)
                     //     /* read file(s) */
         //     for(i = 0; i < interact; i++){
@@ -113,8 +106,7 @@ int main(int ac, char *av[])
         // }
             
         }
-        else if (option == 'v')
-        {
+        else if (option == 'v'){
             memset(buf, 0, BUFSIZ);
             // list files in 'rrmbin'
             printf("option v!!");
@@ -133,12 +125,10 @@ int main(int ac, char *av[])
             close(sock_id);
             
         }
-        else if (option == 'r')
-        {
+        else if (option == 'r'){
             // restore file(s)
         }
-        else
-        {
+        else{
             oops("wrong option");
         }
         close(sock_fd);
@@ -147,14 +137,11 @@ int main(int ac, char *av[])
 }
 /* prevent some bad command injections */
 /* like "; rm *" */
-void sanitize(char *str)
-{
+void sanitize(char *str){
     char *src, *dest;
 
-    for (src = dest = str; *src; src++)
-    {
-        if (*src == '/' || isalnum(*src))
-        {
+    for (src = dest = str; *src; src++){
+        if (*src == '/' || isalnum(*src)){
             *dest++ = *src;
         }
     }
