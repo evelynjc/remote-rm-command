@@ -26,21 +26,8 @@ int interact = 0;
 struct stat st = {0};
 
 void sanitize(char *);
-void child_handler(int signal){
-    int status;
-    pid_t spid;
 
-    /* -1 - get any child process
-    ** WNOHANG - parent process continues
-    ** regardless of the termination of child process */
-    while((spid = waitpid(-1, &status, WNOHANG)) > 0){
-        printf("Child Process Wait Results \n");
-        printf("================================\n");
-        printf("PID         : %d\n", spid);
-        printf("Exit Value  : %d\n", WEXITSTATUS(status));
-        printf("Exit Stat   : %d\n", WIFEXITED(status));
-    }
-}
+
 int main(int ac, char *av[])
 {
     struct sockaddr_in saddr;  /* build the server's addr */
@@ -48,18 +35,15 @@ int main(int ac, char *av[])
     char hostname[HOSTLEN];    /* address */
     int sock_id, sock_fd;      /* line id, file desc */
     FILE *sock_fpi, *sock_fpo; /* IN and OUT streams */
-    FILE *pipe_fp;             /* use popen to run ls */
-    char dirname[BUFSIZ];      /* from client */
-    char command[BUFSIZ];      /* for popen() */
+    //FILE *pipe_fp;             /* use popen to run ls */
+    //char dirname[BUFSIZ];      /* from client */
+    //char command[BUFSIZ];      /* for popen() */
     char buf[BUFSIZ];
     char filebuf[F_BUFSIZ];
     int n_read;
-    FILE *fp;
+    FILE* fp;
     //int     dirlen, c;
     int i;
-
-    signal(SIGCHLD, (void *)child_handler);
-
     /* create rrmbin directory */
     if (stat("./rrmbin", &st) == -1){
         mkdir("./rrmbin", 0777);
@@ -101,22 +85,22 @@ int main(int ac, char *av[])
         */
 
         /* initial read */
-        n_read = read(sock_fd, buf, BUFSIZ);
-        printf("%s\n", buf);
-        sscanf(buf, %c %d, &option, &interact);
+        // n_read = read(sock_fd, buf, BUFSIZ);
+        // printf("%s\n", buf);
+        // sscanf(buf, "%c %d", &option, &interact);
 
-        if(option = 'x'){
-            /* read file(s) */
-            for(i = 0; i < interact; i++){
-                fp = open("thisfile", O_WRONLY | O_CREAT | O_TRUNC, 0644);
-                while((n_read = read(sock_fd, filebuf, F_BUFSIZ)) > 0){
-                    if(write(fp, filebuf, n_read) < n_read){
-                        fclose(fp);
-                    }
-                }
-                close(fp);
-            }
-        }
+        // if(option == 'x'){
+        //     /* read file(s) */
+        //     for(i = 0; i < interact; i++){
+        //         fp = fopen(thisfile, "w+");
+        //         while((n_read = read(sock_fd, filebuf, F_BUFSIZ)) > 0){
+        //             if(write(fp, filebuf, n_read) < n_read){
+        //                 fclose(fp);
+        //             }
+        //         }
+        //         close(fp);
+        //     }
+        // }
         
         /*
         // open reading direction as buffered stream //
