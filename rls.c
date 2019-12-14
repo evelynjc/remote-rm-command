@@ -1,4 +1,4 @@
-/************** rrm_clnt.c **************/
+/* rrm_serv.c */
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -8,12 +8,12 @@
 #include <netdb.h>
 #include <string.h>
 
-#define oops(msg)           \
-    {                       \
-        printf("Error!: "); \
-        perror(msg);        \
-        printf("\n");       \
-        exit(1);            \
+#define oops(msg)    \
+    {                \
+        printf("Error!: ");\
+        printf(msg); \
+        printf("\n");\
+        exit(1);     \
     }
 #define PORT 13000
 #define F_BUFSIZ 4096
@@ -54,31 +54,22 @@ int main(int ac, char *av[])
     if (connect(sock_id, (struct sockaddr *)&servadd, sizeof(servadd)) != 0)
         oops("connect");
 
-    memset(buf, 0, BUFSIZ);
-    sprintf(buf, "%c %d", option, n_files);
-    n_write = write(sock_id, buf, BUFSIZ);
-    if(n_write == -1)
-        oops("failed initial write() sending OPTION and C-S iteration count");
-    
     /* main command execution depending on the option */
-    if (option == 'x')
-    {
-        // removing file(s)
-    }
-    else if (option == 'v')
-    {
-        printf("\n/**************** Recycle Bin *******************/\n");
-        while((n_read = read(sock_id, buf, BUFSIZ)) > 0)
-            if(write(1, buf, n_read) == -1)
-                oops("write ls -la results");
-    }
-    else if (option == 'r')
-    {
-        // restore file(s)
-    }
-    else{
-        oops("wrong option");
-    }
+    // if (option == 'x')
+    // {
+    //     // removing file(s)
+    // }
+    // else if (option == 'v')
+    // {
+    //     // list files in 'rrmbin'
+    // }
+    // else if (option == 'r')
+    // {
+    //     // restore file(s)
+    // }
+    // else{
+    //     oops("wrong option");
+    // }
 
     // else {// plain rm
     //     // check if all the file(s) exist
