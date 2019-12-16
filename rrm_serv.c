@@ -1,51 +1,40 @@
+/************** rrm_serv.c **************/
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <netinet/in.h>
-#include <netdb.h>
 #include <ctype.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <signal.h>
+#include <netinet/in.h>
+#include <netdb.h>
+#include <arpa/inet.h>
 #include <fcntl.h>
-
-#define PORT 13000
-#define HOSTLEN 256
-#define F_BUFSIZ 4096
-#define MAX_LISTEN_QUEUE 5
-#define oops(msg)           \
-    {                       \
-        perror(msg);        \
-        printf("\n");       \
-        exit(1);            \
-    }
+#include "rrm.h"
 
 char option = 0;
 int interact = 0;
 struct stat st = {0};
 
-void sanitize(char *);
-
-int main(int ac, char *av[])
-{
-    struct sockaddr_in saddr; /* build the server's addr */
+int main(int ac, char *av[]){
+    struct sockaddr_in saddr, caddr; /* build the server's addr */
+    socklen_t caddrlen;
     struct hostent *hp;        /* part of the server's */
     char hostname[HOSTLEN];    /* address */
     int sock_id, sock_fd;      /* line id, file desc */
+    char clntaddr[INET_ADDRSTRLEN];
     FILE *sock_fpi, *sock_fpo; /* IN and OUT streams */
     FILE *pipe_fp;             /* use popen to run ls */
-    char buf[BUFSIZ];
-    char filebuf[F_BUFSIZ];
-    int n_read, c,;
     FILE *fp;
-    int c;
-    int i;
-
+    char buf[BUFSIZ];
+    char filename[BUFSIZ] ="rrmbin/", tempfname[BUFSIZ];
+    int c, i, n_read;
+    ssize_t fsize;
+    
+    if(!n_read){}
     /* create rrmbin directory */
-    if (stat("./rrmbin", &st) == -1)
-    {
+    if (stat("./rrmbin", &st) == -1){
         mkdir("./rrmbin", 0777);
     }
     /******************** SOCKET ************************/
@@ -64,55 +53,58 @@ int main(int ac, char *av[])
         oops("bind");
 
     /******************** LISTEN ************************/
-    if (listen(sock_id, MAX_LISTEN_QUEUE) != 0)
-    {
+    if (listen(sock_id, MAX_LISTEN_QUEUE) != 0){
         oops("listen");
     }
-    else
-    {
+    else{
         puts("waiting for calls...");
     }
 
     /* main loop */
     while (1){
         /******************** ACCEPT ************************/
-        sock_fd = accept(sock_id, NULL, NULL); /* wait for call */
+        sock_fd = accept(sock_id, (struct sockaddr *) &caddr, &caddrlen); /* wait for call */
         if (sock_fd == -1){
             oops("accept");
         }
         else{
-            printf("New Client!\n");
+            caddrlen = sizeof(caddr);
+            getpeername(sock_fd, (struct sockaddr *)&caddr, &caddrlen);
+            inet_ntop(AF_INET, &caddr.sin_addr, clntaddr, sizeof(clntaddr));
+            printf("New Client: %s\n", clntaddr);
         }
 
         /* initial read */
         memset(buf, 0, BUFSIZ);
         n_read = read(sock_fd, buf, BUFSIZ);
-        printf("%s\n", buf);
         sscanf(buf, "%c %d", &option, &interact);
-        //printf("option: %c, iterations: %d\n", option, interact);
+        printf("option: %c, file(s) to be transferred of restored: %d\n\n", option, interact);
 
         if (option == 'x'){
-            // removing file(s)
-                    //     /* read file(s) */
-        //     for(i = 0; i < interact; i++){
-        //         fp = fopen(thisfile, "w+");
-        //         while((n_read = read(sock_fd, filebuf, F_BUFSIZ)) > 0){
-        //             if(write(fp, filebuf, n_read) < n_read){
-        //                 fclose(fp);
-        //             }
-        //         }
-        //         close(fp);
-        //     }
-        // }
-            
+            // file(s) from client to the rrmbin
+            /* read file(s) */
+            for(i = 0; i < interact; i++){
+                // receive filename
+                memset(buf, 0, BUFSIZ);
+                n_read = read(sock_fd, buf, BUFSIZ);
+                strcpy(tempfname, buf);
+                strcat(filename, tempfname);
+                //printf("temp fname: %s, filename: %s\n", tempfname, filename);
+                // receive file and save into rrmbin
+                fp = fopen(filename, "wb");
+                fsize = recv_file(sock_fd, fp);
+                printf("client: %s, file: %s, file size received: %lu\n", clntaddr, tempfname, fsize);
+                fclose(fp);
+                strcpy(filename,"rrmbin/");
+            }
+            close(sock_fd); 
         }
         else if (option == 'v'){
             memset(buf, 0, BUFSIZ);
             // list files in 'rrmbin'
-            printf("option v!!");
             if((sock_fpi = fdopen(sock_fd, "r")) == NULL)
                 oops("fdopen reading");
-            if((sock_fpo = fdopen(sock_fd, "w"))== NULL)
+            if((sock_fpo = fdopen(sock_fd, "w")) == NULL)
                 oops("fdopen writing");
             if((pipe_fp = popen("ls -la rrmbin", "r")) == NULL)
                 oops("popen");
@@ -127,23 +119,35 @@ int main(int ac, char *av[])
         }
         else if (option == 'r'){
             // restore file(s)
+            for(i = 0; i < interact; i++){
+                // receive filename
+                memset(buf, 0, BUFSIZ);
+                strcpy(filename, "rrmbin/");
+                n_read = read(sock_fd, buf, BUFSIZ);
+                strcat(filename, buf);
+                printf("filename %s\n", filename);
+
+                // check if the requested file exists
+                if (stat(filename, &st) == -1){
+                    oops("requested file doesn't exist");
+                }
+                // send file
+                fp = fopen(filename, "rb");
+                fsize = send_file(sock_fd, fp);
+                printf("File %s (size: %lu) has been restored to client %s\n", filename, fsize, clntaddr);
+                fclose(fp);
+
+                // delete file after transfer
+                if (remove(filename) != 0) 
+                    oops("file delete error");
+            }
+            close(sock_fd);
         }
         else{
             oops("wrong option");
         }
         close(sock_fd);
-    
-    return 0;
-}
-/* prevent some bad command injections */
-/* like "; rm *" */
-void sanitize(char *str){
-    char *src, *dest;
-
-    for (src = dest = str; *src; src++){
-        if (*src == '/' || isalnum(*src)){
-            *dest++ = *src;
-        }
     }
-    *dest = '\0';
+    close(sock_id);
+    return 0;
 }

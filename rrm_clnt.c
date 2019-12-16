@@ -7,32 +7,23 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include <string.h>
+#include <fcntl.h>
+#include "rrm.h"
 
-#define oops(msg)           \
-    {                       \
-        perror(msg);        \
-        printf("\n");       \
-        exit(1);            \
-    }
-#define PORT 13000
-#define F_BUFSIZ 4096
 char option = 'x';
-char destpath[BUFSIZ] = "";
 int n_files = 0;
+char destpath[BUFSIZ] = "";
+int fname_idx = 0;
 
 void opt_parse(int, char **);
-int main(int ac, char *av[])
-{
-    struct sockaddr_in servadd;
+int main(int ac, char *av[]){
+    struct sockaddr_in myaddr, servadd;
     struct hostent *hp;
-    int sock_id; // sock_fd;
-    int n_interact;
+    int sock_id;
     char buf[BUFSIZ];
-    char filename[BUFSIZ];
     int n_read, n_write, i;
-    FILE *f_to_remove, *f_to_restore;
-    char filebuf[F_BUFSIZ];
-    int f_n_read;
+    FILE *fp;
+    ssize_t fsize;
 
     /* arguments parsing */
     opt_parse(ac, av);
@@ -41,7 +32,12 @@ int main(int ac, char *av[])
     sock_id = socket(AF_INET, SOCK_STREAM, 0);
     if (sock_id == -1)
         oops("socket");
-
+    myaddr.sin_family = AF_INET;
+    myaddr.sin_addr.s_addr = INADDR_ANY;
+    myaddr.sin_port = htons(32768);
+    /********************** BIND ************************/
+    if(bind(sock_id, (struct sockaddr*)&myaddr, sizeof(myaddr)) != 0)
+        oops("bind");
     /******************** CONNECT ************************/
     bzero(&servadd, sizeof(servadd));
     hp = gethostbyname(av[1]);
@@ -53,108 +49,87 @@ int main(int ac, char *av[])
     if (connect(sock_id, (struct sockaddr *)&servadd, sizeof(servadd)) != 0)
         oops("connect");
 
+    // initial write() - option and the number of files to be handled
     memset(buf, 0, BUFSIZ);
     sprintf(buf, "%c %d", option, n_files);
     n_write = write(sock_id, buf, BUFSIZ);
     if(n_write == -1)
-        oops("failed initial write() sending OPTION and C-S iteration count");
+        oops("failed ending OPTION and C-S iteration count");
     
     /* main command execution depending on the option */
-    if (option == 'x')
-    {
-        // removing file(s)
+    if (option == 'x'){
+        /* removing file(s) */
+        // check if all the files exist
+        for (i = 2; i < ac; i++){
+            fp = fopen(av[i], "rb");
+            if (!fp){
+                printf("cannot find file %s. abort rrm\n", av[i]);
+                exit(1);
+            }
+            fclose(fp);
+        }
+        // send file(s)
+        for (i = 2; i < ac; i++){
+            fp = fopen(av[i], "rb");
+            if(!fp) oops("can't open file");
+            // send the filename to the server
+            memset(buf, 0, BUFSIZ);
+            sprintf(buf, "%s", av[i]);
+            n_write = write(sock_id, buf, BUFSIZ);
+            if(n_write == -1)
+                oops("send filename fail");
+            // send the file to the server
+            fsize = send_file(sock_id, fp);
+            printf("File %s (size: %lu) has been removed\n", av[i], fsize);
+            fclose(fp);
+            // delete file after transfer
+            if (remove(av[i]) != 0) 
+                oops("file delete error");
+        }
     }
-    else if (option == 'v')
-    {
+    else if (option == 'v'){
         printf("\n/**************** Recycle Bin *******************/\n");
         while((n_read = read(sock_id, buf, BUFSIZ)) > 0)
             if(write(1, buf, n_read) == -1)
                 oops("write ls -la results");
     }
-    else if (option == 'r')
-    {
+    else if (option == 'r'){
         // restore file(s)
+        for (i = fname_idx; i < ac; i++){
+            // send the filename to the server
+            char filename[BUFSIZ] = "";
+            memset(buf, 0, BUFSIZ);
+            sprintf(buf, "%s", av[i]);
+            n_write = write(sock_id, buf, BUFSIZ);
+            if(n_write == -1)
+                oops("send filename fail");
+            
+            // if destination path is given
+            if(strcmp(destpath, "") != 0){ 
+                
+                if(destpath[strlen(destpath) - 1] != '/'){
+                    strcat(destpath, "/");
+                }
+            }
+            // receive file
+            strcpy(filename, destpath);
+            strcat(filename, av[i]);
+            fp = fopen(filename, "wb");
+            fsize = recv_file(sock_id, fp);
+            printf("file: %s, file size received: %lu\n", av[i], fsize);
+            fclose(fp);
+        }
     }
     else{
         oops("wrong option");
     }
-
-    // else {// plain rm
-    //     // check if all the file(s) exist
-    //     for (i = 2; i < ac; i++){
-    //         f_to_remove = open(av[i], "rb");
-    //         if (!f_to_remove){
-    //             printf("cannot find file %s. abort rrm\n", av[i]);
-    //             exit(1);
-    //         }
-    //         fclose(f_to_remove);
-    //     }
-    //     // write to server - which option, how many files
-    //     memset(buf, 0, BUFSIZ);
-    //     snprintf(buf, BUFSIZ, "%c %d %s", option, ac - 2, av[i]);
-    //     if( write(sock_id, av[2], strlen(av[2])) == -1 )
-    //         oops("write - option and how many file(s)");
-        
-    //     // send file(s)
-    //     for (i = 2; i < ac; i++){
-    //         while (1){
-    //             f_to_remove = open(av[i], "rb");
-    //             memset(filebuf, 0, F_BUFSIZ);
-    //             f_n_read = read(f_to_remove, filebuf, F_BUFSIZ);
-    //             printf("f_n_read: %s\n", filebuf);
-    //             n_write = write(sock_id, filebuf, F_BUFSIZ);
-    //             if(n_write == -1)
-    //                 oops("write - file transfer");
-                
-    //             if (f_n_read == EOF | f_n_read == 0){
-    //                 printf("finish reading file %s\n", av[3]);
-    //                 break;
-    //             }
-    //             fclose(f_to_remove);
-    //         }
-            
-    //     }
-        close(sock_id);
-    //}
-    /*
-    // Step 1: get a socket
-    sock_id = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock_id == -1)
-        oops("socket");
-    
-    // Step 2: connect to server
-    bzero( &servadd, sizeof(servadd) );
-    hp = gethostbyname( av[1] );
-    if (hp == NULL)
-        oops(av[1]);
-    bcopy(hp->h_addr, (struct sockaddr *)&servadd.sin_addr, hp->h_length);
-    servadd.sin_port = htons(PORT);
-    servadd.sin_family = AF_INET;
-
-    if ( connect(sock_id, (struct sockaddr*)&servadd, sizeof(servadd)) != 0)
-        oops("connect");
-    
-    // Step3: send directory name, then read back results
-    if( write(sock_id, av[2], strlen(av[2])) == -1 )
-        oops("write");
-    if( write(sock_id, "\n", 1) == -1 )
-        oops("write");
-    
-    while( (n_read = read(sock_id, buffer, BUFSIZ)) > 0){
-        if ( write(1, buffer, n_read)  == -1 ){
-            oops("write");
-        }
-    }
     close(sock_id);
-    */
     return 0;
 }
-
 void opt_parse(int ac, char **av){
-    int i, j, k = 0;
+    int i, k = 0;
 
-    if (ac < 3)
-    {
+    if (ac < 3){
         printf("** rrm - a remote recycle bin service **\n\n");
         printf(" (1) if you wish to delete file(s)\n");
         printf("    usage: ./rrm [HOSTNAME] [FILE]..\n\n");
@@ -175,6 +150,7 @@ void opt_parse(int ac, char **av){
     }
     else{
         if(strcmp(av[2], "-r") == 0){
+            fname_idx = 3;
             if(!av[3] || strcmp(av[3], "-p") == 0 )  oops("missing filename(s) to restore");
             option = 'r';
             // -p scan
@@ -200,6 +176,7 @@ void opt_parse(int ac, char **av){
             if(strcmp(av[4], "-r") == 0){
                 option = 'r';
                 n_files = ac - 5;
+                fname_idx = 5;
                 strcpy(destpath, av[3]);
             }
             else{
@@ -214,5 +191,5 @@ void opt_parse(int ac, char **av){
             n_files = ac - 2;
         }
     }
-    printf("option: %c, -p?: %d, n_files: %d, destpath: %s\n", option, k, n_files, destpath);
+    printf("option: %c, -p?: %d, file arg starts at: %d, n_files: %d, destpath: %s\n", option, k, fname_idx, n_files, destpath);
 }
