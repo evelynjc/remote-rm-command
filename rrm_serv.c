@@ -114,7 +114,7 @@ int main(int ac, char *av[]){
                 putc(c, sock_fpo);
             pclose(pipe_fp);
             fclose(sock_fpo);
-            close(sock_id);
+            close(sock_fd);
             
         }
         else if (option == 'r'){

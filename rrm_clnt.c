@@ -140,7 +140,7 @@ void opt_parse(int ac, char **av){
         printf("    -r      restore FILE(s) to the current directory\n\
             ./rrm [HOSTNAME] -r [FILE]..\n");
         printf("    -p      path, restore FILE(s) to the specified destination\n\
-            ./rrm [HOSTNAME] -p [PATH] [FILE]..\n\n");
+            ./rrm [HOSTNAME] .. -p [PATH] ..\n\n");
         printf("    To use both of the options,\n    ./rrm [HOSTNAME] -r [FILE].. -p [PATH]\n    OR\n    ./rrm [HOSTNAME] -p [PATH] -r [FILE]..\n\n");
         exit(1);
     }
